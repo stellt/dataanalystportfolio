@@ -87,3 +87,7 @@ def test_tables_built_per_file_match_whole_panel(cfg, four_loan_panel):
     assert combined.keys() == whole.keys()
     for name in whole:
         pd.testing.assert_frame_equal(combined[name], whole[name], check_dtype=False)
+
+
+def test_severity_with_no_liquidations_is_empty(cfg, four_loan_panel):
+    assert severity_by_default_year(four_loan_panel, cfg).empty

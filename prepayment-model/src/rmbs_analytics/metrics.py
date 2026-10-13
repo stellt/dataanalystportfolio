@@ -150,11 +150,13 @@ def liquidations(panel: pd.DataFrame, cfg: Config) -> pd.DataFrame:
         panel["zero_balance_code"].isin(cfg.schema.credit_zero_balance).fillna(False)
         & panel["actual_loss"].notna()
     ]
-    defaults = default_period(panel)
+    defaults = default_period(panel).rename("default_period").reset_index()
+    liq = liq[["loan_id", "zero_balance_removal_upb", "start_upb", "actual_loss"]].merge(
+        defaults, on="loan_id", how="left")
     return pd.DataFrame({
-        "default_year": liq["loan_id"].map(defaults).dt.year.to_numpy(),
-        "upb_at_default": liq["zero_balance_removal_upb"].fillna(liq["start_upb"]).to_numpy(),
-        "actual_loss": liq["actual_loss"].to_numpy(),
+        "default_year": liq["default_period"].dt.year,
+        "upb_at_default": liq["zero_balance_removal_upb"].fillna(liq["start_upb"]),
+        "actual_loss": liq["actual_loss"],
     })
 
 
