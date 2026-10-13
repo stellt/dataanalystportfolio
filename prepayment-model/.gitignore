@@ -12,3 +12,8 @@ dist/
 
 # Notebooks
 .ipynb_checkpoints/
+
+# Local iCloud opt-out (see README): real folders are *.nosync, symlinked
+data
+*.nosync/
+.venv

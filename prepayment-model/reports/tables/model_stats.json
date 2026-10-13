@@ -1,0 +1,14 @@
+{
+  "test_rows": 11944032,
+  "test_prepays": 110076,
+  "auc": 0.6753494087255438,
+  "log_loss": 0.049904666580085376,
+  "train_rows": 8784040,
+  "train_prepays": 115112,
+  "train_sample_rows": 1848898,
+  "train_end": "2020-12",
+  "nonevent_sample_frac": 0.2,
+  "converged": true,
+  "burnout_coef": -0.019057960823217705,
+  "s_curve_increasing": true
+}

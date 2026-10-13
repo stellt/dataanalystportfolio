@@ -37,8 +37,14 @@ Python 3.11 or later.
 cd prepayment-model
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest            # 43 tests, a few seconds
+pytest            # 44 tests, a few seconds
 ```
+
+> **macOS + iCloud:** if this folder is inside an iCloud-synced `Documents`, iCloud can
+> offload files from `.venv/` and `data/` when disk space runs low, which breaks imports.
+> iCloud skips names ending in `.nosync`, so create them as
+> `python -m venv .venv.nosync && ln -s .venv.nosync .venv` and
+> `mkdir data.nosync && ln -s data.nosync data`.
 
 ## Get the data
 
@@ -50,13 +56,16 @@ Raw files are never committed (`data/` is git-ignored).
    Download the **sample** files (about 50,000 loans per origination year) for
    **2015 to 2022**, unzip them and put the `.txt` files in `data/raw/`:
 
+   Symlinks work too (`ln -s ~/Downloads/sample_2015/*.txt data/raw/`).
+
    ```
-   data/raw/sample_orig_2015.txt   data/raw/sample_svcg_2015.txt
+   data/raw/sample_orig_2015.txt   data/raw/sample_perf_2015.txt
    ...
-   data/raw/sample_orig_2022.txt   data/raw/sample_svcg_2022.txt
+   data/raw/sample_orig_2022.txt   data/raw/sample_perf_2022.txt
    ```
 
-   Full quarterly files (`orig_YYYYQn.txt` / `perf_YYYYQn.txt`, or the older
+   Older sample downloads named `sample_svcg_YYYY.txt` also work. Full quarterly
+   files (`orig_YYYYQn.txt` / `perf_YYYYQn.txt`, or the older
    `historical_data_YYYYQn.txt` / `historical_data_time_YYYYQn.txt`) also work.
    If your download uses other names, add a pattern under `raw_files` in
    `config/analysis.yaml`.
@@ -116,7 +125,7 @@ All rates are balance-weighted by `start_upb`, as the market quotes them:
 ```
 SMM = Σ start_upb · prepaid   / Σ start_upb · active_start      CPR = 1 − (1 − SMM)^12
 MDR = Σ start_upb · defaulted / Σ start_upb · active_start      CDR = 1 − (1 − MDR)^12
-Severity = −Σ actual loss / Σ UPB at liquidation   (liquidated loans only, by default year)
+Severity = Σ actual loss / Σ UPB at liquidation    (liquidated loans only, by default year)
 ```
 
 Cohort tables cut by vintage, FICO (<680, 680–719, 720–759, 760+), LTV (≤60, 60–80,
@@ -147,7 +156,7 @@ standard errors.
   checks that corrected predictions sum to the actual number of prepayments.
 * **Evaluation:** actual vs predicted CPR by month and by incentive bucket, plus AUC
   and log-loss. `model_stats.json` also records whether the fit converged, the burnout
-  coefficient's sign and whether the fitted S-curve rises with incentive.
+  coefficient's sign and whether the fitted S-curve rises across the −100 to +150 bp range.
 
 ## Limitations
 
@@ -162,7 +171,8 @@ standard errors.
   model and no servicer or geographic effects. It explains speeds given realised
   rates; it does not forecast rates.
 * **Loan age resets on modification** in Freddie Mac's data, which slightly distorts the
-  seasoning ramp for modified loans.
+  seasoning ramp for modified loans. Payoff records that repeat the prior month's age
+  are corrected (about 17% of payoffs in the 2022 sample).
 
 ## Project structure
 
@@ -182,7 +192,7 @@ prepayment-model/
 │   └── cli.py                # `rmbs` command
 ├── tests/
 │   ├── fixtures/             # hand-built raw files (both layouts) + PMMS sample
-│   └── test_*.py             # 43 tests; every expected number checkable on paper
+│   └── test_*.py             # 44 tests; every expected number checkable on paper
 └── reports/
     ├── figures/              # generated charts (committed)
     ├── tables/               # summary tables (committed)
