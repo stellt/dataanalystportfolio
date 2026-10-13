@@ -37,7 +37,7 @@ Python 3.11 or later.
 cd prepayment-model
 python -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
-pytest            # 44 tests, a few seconds
+pytest            # 49 tests, a few seconds
 ```
 
 > **macOS + iCloud:** if this folder is inside an iCloud-synced `Documents`, iCloud can
@@ -45,6 +45,21 @@ pytest            # 44 tests, a few seconds
 > iCloud skips names ending in `.nosync`, so create them as
 > `python -m venv .venv.nosync && ln -s .venv.nosync .venv` and
 > `mkdir data.nosync && ln -s data.nosync data`.
+
+## Try it in one minute (no data download)
+
+```bash
+rmbs demo
+```
+
+`rmbs demo` generates a seeded **synthetic** dataset (3,200 made-up loans in the
+Freddie Mac file format, with a stylised 2015–2026 rate path) and runs the full
+pipeline on it offline: ingest, panel, cohort tables, charts and the out-of-time model.
+Output goes to `demo_output/`, which is git-ignored. The synthetic loans follow a simple
+hazard model with an S-curve, seasoning, burnout, a COVID forbearance spike and
+post-2022 lock-in, so the charts look like the real ones, but **the numbers mean
+nothing**. The real results are in `reports/`. Options: `--loans-per-vintage`,
+`--seed`, `--out`.
 
 ## Get the data
 
@@ -81,6 +96,7 @@ rmbs panel       # loan-month panel, event flags, start_upb, incentive, months_i
 rmbs metrics     # cohort tables + charts
 rmbs model       # fit, evaluate out of time, save coefficients and charts
 rmbs all         # every step in order
+rmbs demo        # the same pipeline on synthetic data (see above)
 ```
 
 Every command takes `--config path/to/analysis.yaml`. Analysis choices (vintages,
@@ -189,10 +205,11 @@ prepayment-model/
 │   ├── metrics.py            # smm, cpr, mdr, cdr, severity, cohort tables
 │   ├── model.py              # features, split, fit, predict, evaluation
 │   ├── plots.py              # all charts
+│   ├── demo.py               # synthetic data for `rmbs demo`
 │   └── cli.py                # `rmbs` command
 ├── tests/
 │   ├── fixtures/             # hand-built raw files (both layouts) + PMMS sample
-│   └── test_*.py             # 44 tests; every expected number checkable on paper
+│   └── test_*.py             # 49 tests; every expected number checkable on paper
 └── reports/
     ├── figures/              # generated charts (committed)
     ├── tables/               # summary tables (committed)
@@ -216,3 +233,4 @@ prepayment-model/
 | `test_schema` | Ingested columns and dtypes match `schema.yaml`, for both layouts |
 | `test_model_smoke` | Model fits on a seeded synthetic panel; predictions lie in [0, 1] |
 | `test_pipeline_end_to_end` | Raw fixture files → panel → tables and charts |
+| `test_demo_runs_whole_pipeline` | `rmbs demo` runs every step, including the model |

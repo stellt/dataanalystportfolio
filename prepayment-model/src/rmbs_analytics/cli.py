@@ -5,13 +5,14 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Iterator
+from dataclasses import replace
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import typer
 
-from rmbs_analytics import ingest, metrics, model, panel, plots, rates
+from rmbs_analytics import demo, ingest, metrics, model, panel, plots, rates
 from rmbs_analytics.config import DEFAULT_ANALYSIS, Config, load_config
 
 app = typer.Typer(add_completion=False, no_args_is_help=True,
@@ -19,6 +20,7 @@ app = typer.Typer(add_completion=False, no_args_is_help=True,
 log = logging.getLogger("rmbs")
 
 ConfigOption = typer.Option(DEFAULT_ANALYSIS, "--config", "-c", help="Path to analysis.yaml")
+DemoOutOption = typer.Option("demo_output", "--out", help="Folder for all demo output")
 
 PANEL_READ_COLUMNS = [
     "loan_id", "period", "loan_age", "vintage", "fico_band", "ltv_band", "incentive_bucket",
@@ -232,6 +234,42 @@ def all_cmd(config: Path = ConfigOption,
     run_panel(cfg)
     run_metrics(cfg)
     run_model(cfg)
+
+
+def demo_config(cfg: Config, out: Path) -> Config:
+    """Point every path at ``out`` and read the synthetic ``demo_*`` raw files."""
+    out = out.resolve()
+    raw = out / "data" / "raw"
+    return replace(
+        cfg, root=out, raw_dir=raw, interim_dir=out / "data" / "interim",
+        processed_dir=out / "data" / "processed", figures_dir=out / "figures",
+        tables_dir=out / "tables", pmms_path=raw / "MORTGAGE30US.csv",
+        raw_files=(("demo_orig_*.txt", "demo_perf_{tag}.txt"),), vintages=demo.VINTAGES,
+        min_active_loans=min(cfg.min_active_loans, 50),
+    )
+
+
+def run_demo(cfg: Config, out: Path, loans_per_vintage: int, seed: int) -> Config:
+    """Generate synthetic data in ``out`` and run every pipeline step on it."""
+    dcfg = demo_config(cfg, out)
+    counts = demo.write_demo_files(dcfg.raw_dir, dcfg.schema, loans_per_vintage, seed)
+    log.info("Synthetic demo data: %s loans, %s loan-months", f"{counts['loans']:,}",
+             f"{counts['loan_months']:,}")
+    run_ingest(dcfg, force=True)
+    run_panel(dcfg)
+    run_metrics(dcfg)
+    run_model(dcfg)
+    log.info("Demo finished. Charts: %s  Tables: %s", dcfg.figures_dir, dcfg.tables_dir)
+    return dcfg
+
+
+@app.command("demo")
+def demo_cmd(config: Path = ConfigOption,
+             out: Path = DemoOutOption,
+             loans_per_vintage: int = typer.Option(400, help="Synthetic loans per year"),
+             seed: int = typer.Option(7, help="Random seed (same seed = same data)")):
+    """Run the whole pipeline on synthetic data. No download or internet needed."""
+    run_demo(_setup(config), out, loans_per_vintage, seed)
 
 
 if __name__ == "__main__":

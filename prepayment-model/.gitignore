@@ -17,3 +17,6 @@ dist/
 data
 *.nosync/
 .venv
+
+# Output of `rmbs demo`
+demo_output/
