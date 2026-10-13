@@ -1,0 +1,55 @@
+# Analysis settings. Paths are relative to the project root (the folder holding config/).
+
+paths:
+  raw: data/raw
+  interim: data/interim
+  processed: data/processed
+  figures: reports/figures
+  tables: reports/tables
+  pmms: data/raw/MORTGAGE30US.csv
+
+# Raw file pairs. `orig_glob` finds origination files; `{tag}` is whatever the `*`
+# matched, and `perf_template` names the matching performance file.
+raw_files:
+  - {orig_glob: "sample_orig_*.txt", perf_template: "sample_svcg_{tag}.txt"}   # sample files
+  - {orig_glob: "orig_*.txt", perf_template: "perf_{tag}.txt"}                 # Release 47 naming
+  - {orig_glob: "historical_data_*.txt", perf_template: "historical_data_time_{tag}.txt"}
+
+# Origination years to keep (from the loan identifier). null keeps every vintage.
+vintages: [2015, 2016, 2017, 2018, 2019, 2020, 2021, 2022]
+
+events:
+  default_dq_months: 6            # 6 = 180+ days delinquent
+  maturity_tolerance_months: 1    # a 01 payoff this close to maturity is "matured", not prepaid
+
+buckets:
+  fico:
+    edges: [680, 720, 760]        # <680, 680-719, 720-759, 760+
+    labels: ["<680", "680-719", "720-759", "760+"]
+  ltv:
+    edges: [60, 80, 90]           # <=60, 60-80, 80-90, 90+  (upper edge inclusive)
+    labels: ["<=60", "60-80", "80-90", "90+"]
+  incentive_bp:
+    min: -100                     # first bucket is <= -100 bp
+    max: 150                      # last bucket is > +150 bp
+    step: 25
+  max_loan_age: 120               # seasoning ramp runs to month 120
+
+rates:
+  itm_threshold_bp: 50            # "in the money" for the months_itm burnout counter
+  incentive_lag_months: 1         # compare the note rate to last month's PMMS (refi pipeline lag)
+
+reporting:
+  min_active_loans: 200           # cohorts smaller than this are suppressed
+
+model:
+  train_end: "2020-12"            # train on reporting months up to and including this month
+  nonevent_sample_frac: 0.2       # keep this share of non-prepay rows in training
+  random_seed: 42
+  incentive_clip_bp: [-300, 300]  # clip incentive before the spline to avoid extrapolation
+  age_cap: 30                     # seasoning ramp is flat after this many months
+  formula: >-
+    prepaid ~ cr(incentive_clipped, df=4, constraints='center')
+    + age_capped + log_months_itm
+    + C(fico_band) + C(ltv_band) + log_orig_upb
+    + C(loan_purpose) + C(occupancy) + C(month_of_year)

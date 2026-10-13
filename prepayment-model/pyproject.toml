@@ -1,0 +1,43 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rmbs-analytics"
+version = "0.1.0"
+description = "Prepayment and default analytics (CPR, CDR, severity) and a logistic prepayment model on Freddie Mac loan-level data."
+readme = "README.md"
+requires-python = ">=3.11"
+authors = [{ name = "Stella von Zimburg" }]
+dependencies = [
+    "pandas~=3.0",
+    "pyarrow>=17,<27",
+    "numpy>=2.0,<3",
+    "statsmodels~=0.15",
+    "patsy~=1.0",
+    "scikit-learn~=1.5",
+    "matplotlib~=3.9",
+    "pyyaml~=6.0",
+    "typer>=0.12,<1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8,<10", "ruff>=0.6,<1"]
+
+[project.scripts]
+rmbs = "rmbs_analytics.cli:app"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "NPY", "PD002"]

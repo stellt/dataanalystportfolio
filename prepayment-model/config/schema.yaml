@@ -1,0 +1,168 @@
+# Freddie Mac Single-Family Loan-Level Dataset (SFLLD) file layouts.
+#
+# Source: Freddie Mac "General User Guide" (January 2026) and "SFLLD Disclosure
+# Changes, effective July 2026" (Release 47, v1.2). Files are pipe-delimited with
+# no header row, so columns are identified by position (list order below).
+#
+# Two layouts exist. The loader picks one by counting the fields in the first row:
+#   release_47 : files published from July 2026 (orig 31 fields, perf 35 fields)
+#   legacy     : files published before July 2026 (orig 32 fields, perf 32 fields)
+#
+# dtype values: str | int | float | yyyymm   (yyyymm is parsed to a month-start date)
+# na_values   : sentinel codes the guide defines as "Not Available"; loaded as null.
+
+layouts:
+  release_47:
+    origination:
+      - {name: credit_score, dtype: int, na_values: [9999]}     # Classic FICO, 300-850
+      - {name: first_payment_date, dtype: yyyymm}
+      - {name: first_time_homebuyer, dtype: str}
+      - {name: maturity_date, dtype: yyyymm}
+      - {name: msa, dtype: str}
+      - {name: mi_pct, dtype: int, na_values: [999]}
+      - {name: num_units, dtype: int, na_values: [99]}
+      - {name: occupancy, dtype: str}                            # P / I / S / 9
+      - {name: orig_cltv, dtype: int, na_values: [999]}
+      - {name: orig_dti, dtype: int, na_values: [999]}
+      - {name: orig_upb, dtype: float}                           # dollars
+      - {name: orig_ltv, dtype: int, na_values: [999]}
+      - {name: orig_rate, dtype: float}                          # percent, e.g. 6.125
+      - {name: channel, dtype: str}
+      - {name: ppm_flag, dtype: str}
+      - {name: amortization_type, dtype: str}
+      - {name: property_state, dtype: str}
+      - {name: property_type, dtype: str}
+      - {name: postal_code, dtype: str}
+      - {name: loan_id, dtype: str}                              # PYYQnXXXXXXX
+      - {name: loan_purpose, dtype: str}                         # P / C / N / R / 9
+      - {name: orig_term, dtype: int}                            # months
+      - {name: num_borrowers, dtype: int, na_values: [99]}
+      - {name: seller_name, dtype: str}
+      - {name: super_conforming, dtype: str}
+      - {name: pre_relief_loan_id, dtype: str}
+      - {name: special_program, dtype: str}
+      - {name: relief_refi, dtype: str}
+      - {name: valuation_method, dtype: str}
+      - {name: io_indicator, dtype: str}
+      - {name: vantage_score, dtype: int, na_values: [9999]}     # new in Release 47
+    performance:
+      - {name: loan_id, dtype: str}
+      - {name: period, dtype: yyyymm}                            # monthly reporting period
+      - {name: current_upb, dtype: float}                        # dollars
+      - {name: delinquency_status, dtype: str}                   # 00, 01, ..., RA, XX
+      - {name: loan_age, dtype: int}                             # months
+      - {name: remaining_months, dtype: int}
+      - {name: defect_settlement_date, dtype: yyyymm}
+      - {name: modification_flag, dtype: str}
+      - {name: zero_balance_code, dtype: str}
+      - {name: zero_balance_date, dtype: yyyymm}
+      - {name: current_rate, dtype: float}                       # percent
+      - {name: non_interest_upb, dtype: float}
+      - {name: ddlpi, dtype: yyyymm}
+      - {name: mi_recoveries, dtype: float}
+      - {name: net_sale_proceeds, dtype: str}                    # amount, or C / U codes
+      - {name: non_mi_recoveries, dtype: float}
+      - {name: total_expenses, dtype: float}
+      - {name: legal_costs, dtype: float}
+      - {name: maintenance_costs, dtype: float}
+      - {name: taxes_insurance, dtype: float}
+      - {name: misc_expenses, dtype: float}
+      - {name: actual_loss, dtype: float}                        # dollars, negative = loss
+      - {name: cumulative_mod_cost, dtype: float}
+      - {name: step_mod_flag, dtype: str}
+      - {name: payment_deferral, dtype: str}
+      - {name: eltv, dtype: int, na_values: [999]}
+      - {name: zero_balance_removal_upb, dtype: float}
+      - {name: delinquent_accrued_interest, dtype: float}
+      - {name: disaster_flag, dtype: str}
+      - {name: assistance_plan, dtype: str}
+      - {name: current_mod_cost, dtype: float}
+      - {name: interest_bearing_upb, dtype: float}
+      - {name: mi_cancel, dtype: str}                            # moved from origination file
+      - {name: servicer_name, dtype: str}                        # moved from origination file
+      - {name: cramdown_costs, dtype: float}                     # new in Release 47
+
+  legacy:
+    origination:
+      - {name: credit_score, dtype: int, na_values: [9999]}
+      - {name: first_payment_date, dtype: yyyymm}
+      - {name: first_time_homebuyer, dtype: str}
+      - {name: maturity_date, dtype: yyyymm}
+      - {name: msa, dtype: str}
+      - {name: mi_pct, dtype: int, na_values: [999]}
+      - {name: num_units, dtype: int, na_values: [99]}
+      - {name: occupancy, dtype: str}
+      - {name: orig_cltv, dtype: int, na_values: [999]}
+      - {name: orig_dti, dtype: int, na_values: [999]}
+      - {name: orig_upb, dtype: float}
+      - {name: orig_ltv, dtype: int, na_values: [999]}
+      - {name: orig_rate, dtype: float}
+      - {name: channel, dtype: str}
+      - {name: ppm_flag, dtype: str}
+      - {name: amortization_type, dtype: str}
+      - {name: property_state, dtype: str}
+      - {name: property_type, dtype: str}
+      - {name: postal_code, dtype: str}
+      - {name: loan_id, dtype: str}
+      - {name: loan_purpose, dtype: str}
+      - {name: orig_term, dtype: int}
+      - {name: num_borrowers, dtype: int, na_values: [99]}
+      - {name: seller_name, dtype: str}
+      - {name: servicer_name, dtype: str}
+      - {name: super_conforming, dtype: str}
+      - {name: pre_relief_loan_id, dtype: str}
+      - {name: special_program, dtype: str}
+      - {name: relief_refi, dtype: str}
+      - {name: valuation_method, dtype: str}
+      - {name: io_indicator, dtype: str}
+      - {name: mi_cancel, dtype: str}
+    performance:
+      - {name: loan_id, dtype: str}
+      - {name: period, dtype: yyyymm}
+      - {name: current_upb, dtype: float}
+      - {name: delinquency_status, dtype: str}                   # 0, 1, 2, ..., RA
+      - {name: loan_age, dtype: int}
+      - {name: remaining_months, dtype: int}
+      - {name: defect_settlement_date, dtype: yyyymm}
+      - {name: modification_flag, dtype: str}
+      - {name: zero_balance_code, dtype: str}
+      - {name: zero_balance_date, dtype: yyyymm}
+      - {name: current_rate, dtype: float}
+      - {name: non_interest_upb, dtype: float}
+      - {name: ddlpi, dtype: yyyymm}
+      - {name: mi_recoveries, dtype: float}
+      - {name: net_sale_proceeds, dtype: str}
+      - {name: non_mi_recoveries, dtype: float}
+      - {name: total_expenses, dtype: float}
+      - {name: legal_costs, dtype: float}
+      - {name: maintenance_costs, dtype: float}
+      - {name: taxes_insurance, dtype: float}
+      - {name: misc_expenses, dtype: float}
+      - {name: actual_loss, dtype: float}
+      - {name: cumulative_mod_cost, dtype: float}
+      - {name: step_mod_flag, dtype: str}
+      - {name: payment_deferral, dtype: str}
+      - {name: eltv, dtype: int, na_values: [999]}
+      - {name: zero_balance_removal_upb, dtype: float}
+      - {name: delinquent_accrued_interest, dtype: float}
+      - {name: disaster_flag, dtype: str}
+      - {name: assistance_plan, dtype: str}
+      - {name: current_mod_cost, dtype: float}
+      - {name: interest_bearing_upb, dtype: float}
+
+# Code meanings (identical in both layouts; confirmed against the July 2026 guide).
+codes:
+  zero_balance:
+    "01": Prepaid or matured (voluntary payoff)
+    "02": Third party sale
+    "03": Short sale or charge off
+    "09": REO disposition
+    "15": Whole loan sale
+    "16": Reperforming loan securitization
+    "96": Underwriting or major servicing defect prior to credit event
+  # Which zero balance codes count as which event.
+  prepay_zero_balance: ["01"]
+  credit_zero_balance: ["02", "03", "09", "15"]
+  delinquency:
+    reo_acquisition: RA      # loan is in REO; treated as 180+ days delinquent
+    not_available: [XX]      # status unknown (e.g. before the first payment)
