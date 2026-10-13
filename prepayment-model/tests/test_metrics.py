@@ -2,7 +2,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from rmbs_analytics.metrics import cohort_rates, cpr_to_smm, severity_by_default_year, smm_to_cpr
+from rmbs_analytics.metrics import (
+    all_cohort_sums,
+    all_cohort_tables,
+    cohort_rates,
+    combine_sums,
+    cpr_to_smm,
+    severity_by_default_year,
+    smm_to_cpr,
+    tables_from_sums,
+)
 from rmbs_analytics.panel import build_panel
 
 from .conftest import frames, orig_row, perf_rows
@@ -60,8 +69,21 @@ def test_small_cells_suppressed(four_loan_panel):
 
 def test_severity_by_default_year(cfg):
     rows = perf_rows("F15Q10000001", [100_000, 0], zb={1: "09"})
-    rows[1].update(actual_loss=-25_000.0, zero_balance_removal_upb=100_000.0)
+    rows[1].update(actual_loss=25_000.0, zero_balance_removal_upb=100_000.0)
     orig, perf = frames([orig_row("F15Q10000001")], [rows])
     sev = severity_by_default_year(build_panel(orig, perf, cfg), cfg)
     assert sev["resolved_loans"].tolist() == [1]
     assert sev["severity"].item() == pytest.approx(0.25)
+
+
+def test_tables_built_per_file_match_whole_panel(cfg, four_loan_panel):
+    from dataclasses import replace
+
+    cfg = replace(cfg, min_active_loans=1)
+    halves = [four_loan_panel[four_loan_panel["loan_id"].isin(ids)]
+              for ids in (["F15Q10000001", "F15Q10000002"], ["F15Q10000003", "F15Q10000004"])]
+    combined = tables_from_sums(combine_sums([all_cohort_sums(h, cfg) for h in halves]), cfg)
+    whole = all_cohort_tables(four_loan_panel, cfg)
+    assert combined.keys() == whole.keys()
+    for name in whole:
+        pd.testing.assert_frame_equal(combined[name], whole[name], check_dtype=False)

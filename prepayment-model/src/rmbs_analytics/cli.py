@@ -4,8 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Iterator
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 import typer
 
@@ -36,12 +38,7 @@ def _panel_dir(cfg: Config) -> Path:
     return cfg.processed_dir / "panel"
 
 
-def read_panel(cfg: Config, columns: list[str] | None = None) -> pd.DataFrame:
-    """Load the processed loan-month panel, restoring bucket order from the config."""
-    files = sorted(_panel_dir(cfg).glob("panel_*.parquet"))
-    if not files:
-        raise typer.BadParameter("No panel found; run `rmbs panel` first.")
-    df = pd.concat([pd.read_parquet(f, columns=columns) for f in files], ignore_index=True)
+def _restore_buckets(df: pd.DataFrame, cfg: Config) -> pd.DataFrame:
     orders = {"fico_band": list(cfg.fico_labels), "ltv_band": list(cfg.ltv_labels),
               "incentive_bucket": rates.incentive_labels(cfg)}
     for col, cats in orders.items():
@@ -49,6 +46,24 @@ def read_panel(cfg: Config, columns: list[str] | None = None) -> pd.DataFrame:
             df[col] = pd.Categorical(df[col].astype("string").astype(object), categories=cats,
                                      ordered=True)
     return df
+
+
+def _panel_files(cfg: Config) -> list[Path]:
+    files = sorted(_panel_dir(cfg).glob("panel_*.parquet"))
+    if not files:
+        raise typer.BadParameter("No panel found; run `rmbs panel` first.")
+    return files
+
+
+def iter_panels(cfg: Config, columns: list[str] | None = None) -> Iterator[pd.DataFrame]:
+    """Yield the panel one vintage file at a time (keeps memory flat on large data)."""
+    for f in _panel_files(cfg):
+        yield _restore_buckets(pd.read_parquet(f, columns=columns), cfg)
+
+
+def read_panel(cfg: Config, columns: list[str] | None = None) -> pd.DataFrame:
+    """Load the whole processed loan-month panel, restoring bucket order from the config."""
+    return pd.concat(list(iter_panels(cfg, columns)), ignore_index=True)
 
 
 def run_ingest(cfg: Config, force: bool = False) -> None:
@@ -90,9 +105,14 @@ def run_panel(cfg: Config) -> None:
 
 
 def run_metrics(cfg: Config) -> None:
-    df = read_panel(cfg, PANEL_READ_COLUMNS)
-    tables = metrics.all_cohort_tables(df, cfg)
-    tables["severity_by_default_year"] = metrics.severity_by_default_year(df, cfg)
+    parts, liquidations = [], []
+    for df in iter_panels(cfg, PANEL_READ_COLUMNS):
+        parts.append(metrics.all_cohort_sums(df, cfg))
+        liquidations.append(metrics.liquidations(df, cfg))
+        del df
+    tables = metrics.tables_from_sums(metrics.combine_sums(parts), cfg)
+    tables["severity_by_default_year"] = metrics.severity_from_liquidations(
+        pd.concat(liquidations, ignore_index=True))
     metrics.write_tables(tables, cfg.processed_dir / "cohorts")
     summary = {k: tables[k] for k in ("vintage", "fico_band", "ltv_band", "incentive_bucket",
                                       "overall_by_loan_age", "severity_by_default_year")
@@ -103,19 +123,45 @@ def run_metrics(cfg: Config) -> None:
 
 
 def run_model(cfg: Config) -> None:
-    df = read_panel(cfg, PANEL_READ_COLUMNS)
-    features = model.prepare_features(df, cfg)
-    train, test = model.split_out_of_time(features, cfg)
-    if train.empty or test.empty:
-        span = f"{features['period'].min():%Y-%m} to {features['period'].max():%Y-%m}"
+    # Pass 1: training sample (all prepays + a share of non-prepays), one file at a time.
+    samples, train_rows, train_prepays, periods, has_test = [], 0, 0, [], False
+    for df in iter_panels(cfg, PANEL_READ_COLUMNS):
+        train, test = model.split_out_of_time(model.prepare_features(df, cfg), cfg)
+        train_rows += len(train)
+        train_prepays += int(train["prepaid"].sum())
+        periods += [df["period"].min(), df["period"].max()]
+        has_test = has_test or not test.empty
+        samples.append(model.downsample_nonevents(train, cfg.nonevent_sample_frac,
+                                                  cfg.random_seed))
+        del df, train, test
+    sample = pd.concat(samples, ignore_index=True)
+    if sample.empty or not has_test:
         raise typer.BadParameter(
-            f"Out-of-time split at {cfg.train_end} leaves train={len(train):,} and "
-            f"test={len(test):,} rows (data covers {span}). Adjust model.train_end.")
-    log.info("Fitting on %s train rows (%s prepays); testing on %s rows", f"{len(train):,}",
-             f"{int(train['prepaid'].sum()):,}", f"{len(test):,}")
-    fitted = model.fit_prepay_model(train, cfg)
-    evaluation = model.evaluate(fitted, test)
-    response = model.incentive_response(fitted, train)
+            f"Out-of-time split at {cfg.train_end} leaves no train or no test rows "
+            f"(data covers {min(periods):%Y-%m} to {max(periods):%Y-%m}). "
+            "Adjust model.train_end.")
+    log.info("Fitting on a %s-row sample of %s train rows (%s prepays)", f"{len(sample):,}",
+             f"{train_rows:,}", f"{train_prepays:,}")
+    fitted = model.fit_prepay_model(sample, cfg, presampled=True)
+
+    # Pass 2: score the test period file by file, keeping only sums and (y, p) arrays.
+    by_month, by_incentive, ys, ps = [], [], [], []
+    for df in iter_panels(cfg, PANEL_READ_COLUMNS):
+        _, test = model.split_out_of_time(model.prepare_features(df, cfg), cfg)
+        if test.empty:
+            continue
+        p = fitted.predict(test)
+        by_month.append(model.score_sums(test, p, "period"))
+        by_incentive.append(model.score_sums(test, p, "incentive_bucket"))
+        ys.append(test["prepaid"].to_numpy())
+        ps.append(p)
+        del df, test
+    evaluation = {
+        "by_month": model.finish_scores(pd.concat(by_month), "period"),
+        "by_incentive": model.finish_scores(pd.concat(by_incentive), "incentive_bucket"),
+        "stats": model.classification_stats(np.concatenate(ys), np.concatenate(ps)),
+    }
+    response = model.incentive_response(fitted, sample)
 
     cfg.tables_dir.mkdir(parents=True, exist_ok=True)
     coefs = fitted.coefficients()
@@ -125,12 +171,15 @@ def run_model(cfg: Config) -> None:
     evaluation["by_incentive"].to_csv(cfg.tables_dir / "model_by_incentive.csv", index=False,
                                       float_format="%.6g")
     burnout = coefs.set_index("term")["coef"].get("log_months_itm")
-    stats = {**evaluation["stats"], "train_rows": len(train),
-             "train_prepays": int(train["prepaid"].sum()), "train_end": cfg.train_end,
+    in_range = response[response["incentive_bp"].between(cfg.incentive_min_bp,
+                                                         cfg.incentive_max_bp)]
+    stats = {**evaluation["stats"], "train_rows": train_rows,
+             "train_prepays": train_prepays, "train_sample_rows": len(sample),
+             "train_end": cfg.train_end,
              "nonevent_sample_frac": cfg.nonevent_sample_frac,
              "converged": bool(fitted.results.mle_retvals.get("converged", False)),
              "burnout_coef": None if burnout is None else float(burnout),
-             "s_curve_increasing": bool(response["cpr"].is_monotonic_increasing)}
+             "s_curve_increasing": bool(in_range["cpr"].is_monotonic_increasing)}
     (cfg.tables_dir / "model_stats.json").write_text(json.dumps(stats, indent=2))
     (cfg.tables_dir / "model_summary.txt").write_text(str(fitted.results.summary()))
     plots.make_model_charts(evaluation, response, cfg.figures_dir)

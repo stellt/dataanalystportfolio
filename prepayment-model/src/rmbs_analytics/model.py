@@ -103,17 +103,19 @@ class PrepayModel:
         return table.rename_axis("term").reset_index()
 
 
-def fit_prepay_model(train: pd.DataFrame, cfg: Config,
-                     formula: str | None = None) -> PrepayModel:
+def fit_prepay_model(train: pd.DataFrame, cfg: Config, formula: str | None = None,
+                     presampled: bool = False) -> PrepayModel:
     """Fit the logistic prepayment model on training rows from :func:`prepare_features`.
 
-    Non-events are downsampled by ``cfg.nonevent_sample_frac`` and the intercept is
-    corrected on prediction. Returns a :class:`PrepayModel`; the statsmodels result
-    (with standard errors) is ``.results``.
+    Non-events are downsampled by ``cfg.nonevent_sample_frac`` (skipped when
+    ``presampled``, i.e. the caller already applied :func:`downsample_nonevents`) and
+    the intercept is corrected on prediction. Returns a :class:`PrepayModel`; the
+    statsmodels result (with standard errors) is ``.results``.
     """
     if train["prepaid"].sum() == 0:
         raise ValueError("Training data has no prepayments; check the split date and data.")
-    sample = downsample_nonevents(train, cfg.nonevent_sample_frac, cfg.random_seed)
+    sample = train if presampled else downsample_nonevents(
+        train, cfg.nonevent_sample_frac, cfg.random_seed)
     levels = {col: sample[col].value_counts().index.tolist() for col in CATEGORICAL_FEATURES}
     bounds = {col: (float(sample[col].min()), float(sample[col].max()))
               for col in SPLINE_FEATURES}
@@ -122,18 +124,38 @@ def fit_prepay_model(train: pd.DataFrame, cfg: Config,
                        bounds=bounds)
 
 
-def _actual_vs_predicted(test: pd.DataFrame, p: np.ndarray, by: str) -> pd.DataFrame:
+def score_sums(test: pd.DataFrame, p: np.ndarray, by: str) -> pd.DataFrame:
+    """Per-group UPB, actual prepaid UPB and predicted prepaid UPB (additive across files)."""
     w = test["start_upb"].to_numpy()
     work = pd.DataFrame({by: test[by].reset_index(drop=True), "upb": w,
                          "actual": w * test["prepaid"].to_numpy(), "predicted": w * p})
-    out = work.groupby(by, observed=True).agg(loans=("upb", "size"), start_upb=("upb", "sum"),
-                                              actual=("actual", "sum"),
-                                              predicted=("predicted", "sum")).reset_index()
+    return work.groupby(by, observed=True).agg(
+        loans=("upb", "size"), start_upb=("upb", "sum"), actual=("actual", "sum"),
+        predicted=("predicted", "sum")).reset_index()
+
+
+def finish_scores(sums: pd.DataFrame, by: str) -> pd.DataFrame:
+    """Combine :func:`score_sums` parts and convert to actual vs predicted SMM and CPR."""
+    out = sums.groupby(by, observed=True, sort=True)[["loans", "start_upb", "actual",
+                                                      "predicted"]].sum().reset_index()
     out["actual_smm"] = out["actual"] / out["start_upb"]
     out["predicted_smm"] = out["predicted"] / out["start_upb"]
     out["actual_cpr"] = smm_to_cpr(out["actual_smm"])
     out["predicted_cpr"] = smm_to_cpr(out["predicted_smm"])
     return out.drop(columns=["actual", "predicted"])
+
+
+def _actual_vs_predicted(test: pd.DataFrame, p: np.ndarray, by: str) -> pd.DataFrame:
+    return finish_scores(score_sums(test, p, by), by)
+
+
+def classification_stats(y: np.ndarray, p: np.ndarray) -> dict:
+    """Row counts, AUC and log-loss for test labels ``y`` and probabilities ``p``."""
+    stats = {"test_rows": int(len(y)), "test_prepays": int(y.sum())}
+    if 0 < y.sum() < len(y):
+        stats["auc"] = float(roc_auc_score(y, p))
+        stats["log_loss"] = float(log_loss(y, np.clip(p, 1e-12, 1 - 1e-12)))
+    return stats
 
 
 def predicted_cpr(model: PrepayModel, test: pd.DataFrame, by: str = "period") -> pd.DataFrame:
@@ -147,11 +169,7 @@ def predicted_cpr(model: PrepayModel, test: pd.DataFrame, by: str = "period") ->
 def evaluate(model: PrepayModel, test: pd.DataFrame) -> dict:
     """Test-period diagnostics: CPR tables by month and incentive bucket, AUC, log-loss."""
     p = model.predict(test)
-    y = test["prepaid"].to_numpy()
-    stats = {"test_rows": len(test), "test_prepays": int(y.sum())}
-    if 0 < y.sum() < len(y):
-        stats["auc"] = float(roc_auc_score(y, p))
-        stats["log_loss"] = float(log_loss(y, np.clip(p, 1e-12, 1 - 1e-12)))
+    stats = classification_stats(test["prepaid"].to_numpy(), p)
     return {
         "by_month": _actual_vs_predicted(test, p, "period"),
         "by_incentive": _actual_vs_predicted(test, p, "incentive_bucket"),
