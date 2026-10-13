@@ -1,4 +1,4 @@
-# RMBS Prepayment & Default Analytics
+# Prepayment & Default Analytics
 
 [![prepayment-model](https://github.com/stellt/dataanalystportfolio/actions/workflows/prepayment-model.yml/badge.svg)](https://github.com/stellt/dataanalystportfolio/actions/workflows/prepayment-model.yml)
 
