@@ -10,6 +10,9 @@
 #
 # dtype values: str | int | float | yyyymm   (yyyymm is parsed to a month-start date)
 # na_values   : sentinel codes the guide defines as "Not Available"; loaded as null.
+# negate      : flip the sign on load. Release 47 reports losses/expenses as positive and
+#               recoveries/gains as negative; legacy files used the opposite signs, so
+#               legacy money fields are negated to give one convention downstream.
 
 layouts:
   release_47:
@@ -67,7 +70,7 @@ layouts:
       - {name: maintenance_costs, dtype: float}
       - {name: taxes_insurance, dtype: float}
       - {name: misc_expenses, dtype: float}
-      - {name: actual_loss, dtype: float}                        # dollars, negative = loss
+      - {name: actual_loss, dtype: float}                        # dollars, positive = loss
       - {name: cumulative_mod_cost, dtype: float}
       - {name: step_mod_flag, dtype: str}
       - {name: payment_deferral, dtype: str}
@@ -130,21 +133,21 @@ layouts:
       - {name: current_rate, dtype: float}
       - {name: non_interest_upb, dtype: float}
       - {name: ddlpi, dtype: yyyymm}
-      - {name: mi_recoveries, dtype: float}
+      - {name: mi_recoveries, dtype: float, negate: true}
       - {name: net_sale_proceeds, dtype: str}
-      - {name: non_mi_recoveries, dtype: float}
-      - {name: total_expenses, dtype: float}
-      - {name: legal_costs, dtype: float}
-      - {name: maintenance_costs, dtype: float}
-      - {name: taxes_insurance, dtype: float}
-      - {name: misc_expenses, dtype: float}
-      - {name: actual_loss, dtype: float}
+      - {name: non_mi_recoveries, dtype: float, negate: true}
+      - {name: total_expenses, dtype: float, negate: true}
+      - {name: legal_costs, dtype: float, negate: true}
+      - {name: maintenance_costs, dtype: float, negate: true}
+      - {name: taxes_insurance, dtype: float, negate: true}
+      - {name: misc_expenses, dtype: float, negate: true}
+      - {name: actual_loss, dtype: float, negate: true}
       - {name: cumulative_mod_cost, dtype: float}
       - {name: step_mod_flag, dtype: str}
       - {name: payment_deferral, dtype: str}
       - {name: eltv, dtype: int, na_values: [999]}
       - {name: zero_balance_removal_upb, dtype: float}
-      - {name: delinquent_accrued_interest, dtype: float}
+      - {name: delinquent_accrued_interest, dtype: float, negate: true}
       - {name: disaster_flag, dtype: str}
       - {name: assistance_plan, dtype: str}
       - {name: current_mod_cost, dtype: float}

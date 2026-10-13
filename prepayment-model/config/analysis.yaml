@@ -11,7 +11,8 @@ paths:
 # Raw file pairs. `orig_glob` finds origination files; `{tag}` is whatever the `*`
 # matched, and `perf_template` names the matching performance file.
 raw_files:
-  - {orig_glob: "sample_orig_*.txt", perf_template: "sample_svcg_{tag}.txt"}   # sample files
+  - {orig_glob: "sample_orig_*.txt", perf_template: "sample_perf_{tag}.txt"}   # sample files (2026+)
+  - {orig_glob: "sample_orig_*.txt", perf_template: "sample_svcg_{tag}.txt"}   # sample files (older)
   - {orig_glob: "orig_*.txt", perf_template: "perf_{tag}.txt"}                 # Release 47 naming
   - {orig_glob: "historical_data_*.txt", perf_template: "historical_data_time_{tag}.txt"}
 

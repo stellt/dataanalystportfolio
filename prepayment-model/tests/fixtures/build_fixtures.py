@@ -11,7 +11,7 @@ Release 47 layout (sample_orig_2015 / sample_svcg_2015), 8 months 2015-03 .. 201
   F15Q10000005  100,000, FICO n/a, LTV n/a  sentinels 9999 / 999 load as null; performs
   F15Q10000006  100,000, FICO 690, LTV 90   balance 80,000; 90+ days late from month 2; short sale
                                             (zero balance 03) in month 5, removal UPB
-                                            80,000, actual loss -20,000
+                                            80,000, actual loss 20,000 (Release 47: losses positive)
 Legacy layout (historical_data_2019Q1 / historical_data_time_2019Q1): 2 loans, 3 months.
 """
 
@@ -79,7 +79,7 @@ def r47_files() -> tuple[list[str], list[str]]:
         perf.append(perf_r47("F15Q10000006", period, "0.00" if sale else "80000.00",
                              "03" if i >= 1 else "00", i + 1, 359 - i,
                              zb="03" if sale else "", zb_date=period if sale else "",
-                             rate="4.250", loss="-20000.00" if sale else "",
+                             rate="4.250", loss="20000.00" if sale else "",
                              removal="80000.00" if sale else ""))
     return orig, perf
 
@@ -93,8 +93,10 @@ def legacy_files() -> tuple[list[str], list[str]]:
         return "|".join(f)
 
     def perf(loan_id, period, age, dq):
+        # Legacy sign convention: a loss is negative. The last row carries -5,000.
+        loss = "-5000.00" if (loan_id, age) == ("F19Q10000002", 3) else ""
         f = [loan_id, period, "200000.00", dq, str(age), str(360 - age), "", "", "", "",
-             "4.750", "0.00", "", "", "", "", "", "", "", "", "", "", "", "", "", "80", "",
+             "4.750", "0.00", "", "", "", "", "", "", "", "", "", loss, "", "", "", "80", "",
              "", "", "", "", "200000.00"]
         assert len(f) == 32
         return "|".join(f)

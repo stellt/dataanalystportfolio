@@ -74,6 +74,8 @@ def _type_frame(df: pd.DataFrame, columns: tuple[Column, ...]) -> pd.DataFrame:
             out[c.name] = s.astype("string").str.strip().replace("", pd.NA)
         else:
             out[c.name] = s.astype(_PANDAS_TYPES[c.dtype])
+        if c.negate:
+            out[c.name] = -out[c.name]
     return pd.DataFrame(out)
 
 
@@ -112,6 +114,7 @@ def load_origination(path: Path | str, schema: Schema | None = None) -> pd.DataF
     Returns one row per loan with the columns named in ``schema.yaml``. Rates are in
     percent (6.125 means 6.125%), balances in dollars, LTV/CLTV/DTI in whole percent,
     and YYYYMM dates as month-start timestamps. Not-available sentinels become null.
+    Money fields use the Release 47 sign convention (losses and expenses positive).
     """
     return _load(path, "origination", schema)
 
@@ -160,13 +163,17 @@ def discover_raw_files(cfg: Config) -> list[RawPair]:
             candidates.append((tag, orig, perf))
             if perf.exists():
                 perf_paths.add(perf)
+    unpaired = []
     for tag, orig, perf in candidates:
         if orig in perf_paths:  # e.g. historical_data_time_* also matches historical_data_*
             continue
-        if not perf.exists():
-            log.warning("No performance file %s for %s; skipping", perf.name, orig.name)
-            continue
-        pairs.setdefault(tag, RawPair(tag, orig, perf))
+        if perf.exists():
+            pairs.setdefault(tag, RawPair(tag, orig, perf))
+        else:
+            unpaired.append(orig)
+    for orig in dict.fromkeys(unpaired):
+        if all(p.orig != orig for p in pairs.values()):
+            log.warning("No performance file found for %s; skipping", orig.name)
     return sorted(pairs.values(), key=lambda p: p.tag)
 
 

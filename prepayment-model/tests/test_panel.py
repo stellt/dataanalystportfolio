@@ -106,3 +106,10 @@ def test_buckets(cfg):
     panel = build_panel(orig, perf, cfg)
     assert panel["fico_band"].astype(str).tolist() == ["<680", "680-719", "760+"]
     assert panel["ltv_band"].astype(str).tolist() == ["<=60", "60-80", "90+"]
+
+
+def test_payoff_row_loan_age_is_one_past_prior_month(cfg):
+    rows = perf_rows("F15Q10000001", [100_000, 100_000, 0], zb={2: "01"})
+    rows[2]["loan_age"] = 2  # payoff record repeats last month's age
+    orig, perf = frames([orig_row("F15Q10000001")], [rows])
+    assert build_panel(orig, perf, cfg)["loan_age"].tolist() == [1, 2, 3]

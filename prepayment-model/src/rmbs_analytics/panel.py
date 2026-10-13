@@ -9,6 +9,9 @@ One row per loan per reporting month, with origination attributes joined on and:
 * ``defaulted``    - first month the loan is 180+ days delinquent / REO, or leaves with a
   credit-related zero balance code; at most once per loan
 
+``loan_age`` on a termination row is corrected to one more than the prior month's age,
+because Freddie Mac sometimes repeats the prior age on the payoff record.
+
 Curtailments (partial prepayments) are not counted as prepayments in version 1.
 """
 
@@ -98,6 +101,12 @@ def build_panel(orig: pd.DataFrame, perf: pd.DataFrame, cfg: Config) -> pd.DataF
     first_row = loan.ne(loan.shift())
     zb = panel["zero_balance_code"].astype("string").str.strip().str.zfill(2)
     panel["zero_balance_code"] = zb
+
+    # Termination rows sometimes repeat last month's loan age (or report 0); a payoff
+    # month is always one month older than the month before it.
+    prior_age = panel["loan_age"].shift().where(~first_row)
+    fix_age = zb.notna() & prior_age.notna() & (panel["loan_age"] <= prior_age)
+    panel["loan_age"] = panel["loan_age"].mask(fix_age, prior_age + 1)
 
     # Balance at the start of the month: last month's ending balance.
     prior_upb = panel["current_upb"].shift()

@@ -86,3 +86,10 @@ def test_discover_pairs_skips_performance_files(cfg, tmp_path):
     pairs = discover_raw_files(replace(cfg, raw_dir=tmp_path))
     assert [p.tag for p in pairs] == ["2019Q1"]
     assert pairs[0].perf.name == "historical_data_time_2019Q1.txt"
+
+
+def test_loss_sign_is_release_47_convention_for_both_layouts():
+    r47 = load_performance(RAW / "sample_svcg_2015.txt")
+    legacy = load_performance(LEGACY / "historical_data_time_2019Q1.txt")
+    assert r47["actual_loss"].dropna().tolist() == [20_000.0]
+    assert legacy["actual_loss"].dropna().tolist() == [5_000.0]  # -5,000 in the raw file

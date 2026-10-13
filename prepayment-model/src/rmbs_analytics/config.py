@@ -41,6 +41,7 @@ class Column:
     name: str
     dtype: str
     na_values: tuple[int, ...] = ()
+    negate: bool = False
 
 
 @dataclass(frozen=True)
@@ -132,7 +133,10 @@ def load_schema(path: Path | str = DEFAULT_SCHEMA) -> Schema:
             for c in _require(spec, kind, f"layout {name}"):
                 if c["dtype"] not in DTYPES:
                     raise ConfigError(f"{name}.{kind}.{c['name']}: bad dtype {c['dtype']}")
-                cols.append(Column(c["name"], c["dtype"], tuple(c.get("na_values", ()))))
+                if c.get("negate") and c["dtype"] != "float":
+                    raise ConfigError(f"{name}.{kind}.{c['name']}: negate needs dtype float")
+                cols.append(Column(c["name"], c["dtype"], tuple(c.get("na_values", ())),
+                                   bool(c.get("negate", False))))
             names = [c.name for c in cols]
             if len(set(names)) != len(names):
                 raise ConfigError(f"Duplicate column names in {name}.{kind}")
