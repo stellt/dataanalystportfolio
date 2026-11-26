@@ -1,0 +1,30 @@
+name: prepayment-model
+
+on:
+  push:
+    paths: ["prepayment-model/**", ".github/workflows/prepayment-model.yml"]
+  pull_request:
+    paths: ["prepayment-model/**", ".github/workflows/prepayment-model.yml"]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+    defaults:
+      run:
+        working-directory: prepayment-model
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: pip
+          cache-dependency-path: prepayment-model/pyproject.toml
+      - name: Install
+        run: pip install -e ".[dev]"
+      - name: Lint
+        run: ruff check .
+      - name: Test
+        run: pytest
